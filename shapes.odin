@@ -4,6 +4,7 @@ import hm "core:container/handle_map"
 import "core:fmt"
 import "core:math"
 import "core:math/rand"
+import "core:mem"
 import "core:slice"
 import rl "vendor:raylib"
 
@@ -59,7 +60,6 @@ Game :: struct {
 	entities:               Handle_Map(1024, Entity, Entity_Handle),
 	min_depth:              f32,
 	hud_on:                 bool,
-	windowed_fullscreen:    bool,
 	entity_last_selected:   Entity_Handle,
 	entity_on_mouse_cursor: Entity_Handle,
 	camera:                 rl.Camera2D,
@@ -79,14 +79,14 @@ entity_get :: proc(handle: Entity_Handle) -> (^Entity, bool) {
 }
 
 entity_add :: proc(entity: Entity) -> (Entity_Handle, bool) {
-	draw_order_dirty = true
+	draw_order_sort_required = true
 	return hm.static_add(&game.entities, entity)
 }
 
 entity_remove :: proc(handle: Entity_Handle) -> bool {
 	ok := hm.static_remove(&game.entities, handle)
 	if ok {
-		draw_order_dirty = true
+		draw_order_sort_required = true
 		return true
 	} else {return false}
 }
@@ -129,10 +129,10 @@ entity_create_random_shape :: proc(pos: Vec2f = {0, 0}) -> (Entity_Handle, bool)
 }
 
 
-draw_order_dirty: bool = true
+draw_order_sort_required: bool = true
 draw_order_list: [dynamic; MAX_ENTITIES]Entity_Handle
 draw_order_update :: proc() {
-	if draw_order_dirty {
+	if draw_order_sort_required {
 		clear(&draw_order_list)
 		it := hm.iterator_make(&game.entities)
 		for entity, handle in hm.iterate(&it) {
@@ -144,7 +144,7 @@ draw_order_update :: proc() {
 			return j.z_depth < i.z_depth
 		}
 		slice.sort_by(draw_order_list[:], entity_draw_priority)
-		draw_order_dirty = false
+		draw_order_sort_required = false
 	}
 }
 
@@ -267,11 +267,6 @@ handle_input :: proc() {
 	// These work anywhere
 	if rl.IsKeyPressed(.F11) {
 		rl.ToggleBorderlessWindowed()
-		if game.windowed_fullscreen {
-			rl.SetWindowSize(STARTING_WINDOW_WITDH, STARTING_WINDOW_HEIGHT)
-		}
-		game.windowed_fullscreen = !game.windowed_fullscreen
-		game.camera.offset = get_screen_centre()
 	}
 	if rl.IsKeyPressed(.TAB) {
 		game.hud_on = !game.hud_on
@@ -283,7 +278,7 @@ handle_input :: proc() {
 		game.camera.zoom /= 1.2
 	}
 	if rl.IsMouseButtonDown(.MIDDLE) {
-		game.camera.target -= rl.GetMouseDelta()
+		game.camera.target -= rl.GetMouseDelta() / game.camera.zoom
 	}
 
 	// These require mouse position context
@@ -306,7 +301,7 @@ handle_input :: proc() {
 					hovered_entity.user_act_state = .Dragged
 					game.min_depth -= 0.1
 					hovered_entity.z_depth = game.min_depth
-					draw_order_dirty = true
+					draw_order_sort_required = true
 				}
 				if rl.IsMouseButtonPressed(.RIGHT) {
 					entity_remove(hovered_entity.handle)
@@ -318,12 +313,12 @@ handle_input :: proc() {
 				if rl.IsMouseButtonPressed(.RIGHT) {
 					entity_restore_last_set_state(hovered_entity)
 					hovered_entity.user_act_state = .Set
-					draw_order_dirty = true
+					draw_order_sort_required = true
 				}
 				if rl.IsMouseButtonReleased(.LEFT) {
 					entity_save_set_state(hovered_entity)
 					hovered_entity.user_act_state = .Set
-					draw_order_dirty = true
+					draw_order_sort_required = true
 				}
 			}
 		}
@@ -337,33 +332,58 @@ handle_input :: proc() {
 	last_mouse_world_position = rl.GetScreenToWorld2D(rl.GetMousePosition(), game.camera)
 }
 
-
-main :: proc() {
-
+raylib_setup :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT} | {.WINDOW_RESIZABLE})
 	rl.InitWindow(STARTING_WINDOW_WITDH, STARTING_WINDOW_HEIGHT, "Shapes from Odin!")
 	rl.SetTargetFPS(MAX_FPS)
+}
+
+draw :: proc() {
+	rl.BeginDrawing()
+	rl.ClearBackground({76, 53, 83, 255})
+	rl.BeginMode2D(game.camera)
+	rl.DrawRectangle(-10, -10, 20, 20, rl.WHITE)
+	entity_draw_all()
+	rl.EndMode2D()
+	draw_hud()
+	rl.EndDrawing()
+}
+
+main :: proc() {
+
+	// tracking allocator
+	when ODIN_DEBUG {
+		track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		context.allocator = mem.tracking_allocator(&track)
+
+		defer {
+			if len(track.allocation_map) > 0 {
+				fmt.eprintf("=== %v allocation(s) not freed: ===\n", len(track.allocation_map))
+				for _, entry in track.allocation_map {
+					fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+				}
+			}
+			if len(track.bad_free_array) > 0 {
+				fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+				for entry in track.bad_free_array {
+					fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+				}
+			}
+			mem.tracking_allocator_destroy(&track)
+		}
+	}
+
+	// initial setup
+	raylib_setup()
 	game_setup(&game)
 
+	// game loop
 	for !rl.WindowShouldClose() {
-
+		// forces centre of screen to remain the centre after a resize
+		game.camera.offset = get_screen_centre()
 		handle_input()
-
-		rl.BeginDrawing()
-
-		rl.ClearBackground({76, 53, 83, 255})
-
-		rl.BeginMode2D(game.camera)
-
-		rl.DrawRectangle(-10, -10, 20, 20, rl.WHITE)
-
-		entity_draw_all()
-
-		rl.EndMode2D()
-
-		draw_hud()
-
-		rl.EndDrawing()
+		draw()
 	}
 	rl.CloseWindow()
 }
