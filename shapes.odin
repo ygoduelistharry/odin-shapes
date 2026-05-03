@@ -106,7 +106,7 @@ entity_create_random_shape :: proc(pos: Vec2f = {0, 0}) -> (Entity_Handle, bool)
 		s = .Rectangle
 		mid_pos = pos - {w, h} / 2
 	}
-	colour: [4]u8 = {
+	c: [4]u8 = {
 		u8(rand.uint_range(0, 256)),
 		u8(rand.uint_range(0, 256)),
 		u8(rand.uint_range(0, 256)),
@@ -117,15 +117,40 @@ entity_create_random_shape :: proc(pos: Vec2f = {0, 0}) -> (Entity_Handle, bool)
 		{
 			position = mid_pos,
 			last_set_position = mid_pos,
-			z_depth = auto_cast (game.min_depth),
-			last_set_z_depth = auto_cast (game.min_depth),
+			z_depth = game.min_depth,
+			last_set_z_depth = game.min_depth,
 			width = w,
 			height = h,
 			radius = r,
 			shape = s,
-			colour = colour,
+			colour = c,
 		},
 	)
+}
+
+entity_map_fill_with_circles :: proc() {
+	for idx in 0 ..< len(game.entities.items) {
+		row, col := math.divmod(idx, 30)
+		c: [4]u8 = {
+			u8(rand.uint_range(0, 256)),
+			u8(rand.uint_range(0, 256)),
+			u8(rand.uint_range(0, 256)),
+			255,
+		}
+		pos := rl.GetScreenToWorld2D({f32(50 + row * 25), f32(50 + col * 25)}, game.camera)
+		game.min_depth -= 0.1
+		entity_add(
+			{
+				position = pos,
+				last_set_position = pos,
+				radius = 16,
+				z_depth = game.min_depth,
+				last_set_z_depth = game.min_depth,
+				colour = c,
+				shape = .Circle,
+			},
+		)
+	}
 }
 
 
@@ -232,13 +257,16 @@ draw_hud :: proc() {
 			4,
 			rl.RED,
 		)
+		font := rl.LoadFontEx("FiraCode-Medium.ttf", 20, nil, 0)
 		rl.DrawFPS(0, 0)
-		rl.DrawText("Right click:	Create/Destroy", 0, 19, 20, rl.WHITE)
-		rl.DrawText("Left click:	Drag Around", 0, 39, 20, rl.WHITE)
-		rl.DrawText("Middle click:	Pan Camera", 0, 59, 20, rl.WHITE)
-		rl.DrawText("Scroll wheel:	Zoom Camera", 0, 79, 20, rl.WHITE)
-		rl.DrawText("F11:	Windowed Fullscreen", 0, 99, 20, rl.WHITE)
-		rl.DrawText("Tab:	Toggle HUD", 0, 119, 20, rl.WHITE)
+		rl.DrawTextEx(font, "Right click:   Create/Destroy", {0, 19}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "Left click:    Drag Around", {0, 39}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "Middle click:  Pan Camera", {0, 59}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "Scroll wheel:  Zoom Camera", {0, 79}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "F11:           Windowed Fullscreen", {0, 99}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "Tab:           Toggle HUD", {0, 119}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "Delete:        Destroy All Shapes", {0, 139}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(font, "F9:            Create All Circles", {0, 159}, 20, 0.5, rl.WHITE)
 		draw_entity_map_representation()
 	}
 }
@@ -265,6 +293,12 @@ last_mouse_world_position: Vec2f
 last_hovered_entity_handle: Entity_Handle
 handle_input :: proc() {
 	// These work anywhere
+	if rl.IsKeyPressed(.DELETE) {
+		hm.clear(&game.entities)
+	}
+	if rl.IsKeyPressed(.F9) {
+		entity_map_fill_with_circles()
+	}
 	if rl.IsKeyPressed(.F11) {
 		rl.ToggleBorderlessWindowed()
 	}
