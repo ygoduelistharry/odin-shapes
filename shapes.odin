@@ -248,6 +248,7 @@ draw_entity_map_representation :: proc() {
 	}
 }
 
+hudFont: rl.Font
 draw_hud :: proc() {
 	if game.hud_on {
 		rl.DrawRectangle(
@@ -257,16 +258,15 @@ draw_hud :: proc() {
 			4,
 			rl.RED,
 		)
-		font := rl.LoadFontEx("FiraCode-Medium.ttf", 20, nil, 0)
 		rl.DrawFPS(0, 0)
-		rl.DrawTextEx(font, "Right click:   Create/Destroy", {0, 19}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "Left click:    Drag Around", {0, 39}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "Middle click:  Pan Camera", {0, 59}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "Scroll wheel:  Zoom Camera", {0, 79}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "F11:           Windowed Fullscreen", {0, 99}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "Tab:           Toggle HUD", {0, 119}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "Delete:        Destroy All Shapes", {0, 139}, 20, 0.5, rl.WHITE)
-		rl.DrawTextEx(font, "F9:            Create All Circles", {0, 159}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Right click:   Create/Destroy", {0, 19}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Left click:    Drag Around", {0, 39}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Middle click:  Pan Camera", {0, 59}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Scroll wheel:  Zoom Camera", {0, 79}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "F11:           Windowed Fullscreen", {0, 99}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Tab:           Toggle HUD", {0, 119}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "Delete:        Destroy All Shapes", {0, 139}, 20, 0.5, rl.WHITE)
+		rl.DrawTextEx(hudFont, "F9:            Create All Circles", {0, 159}, 20, 0.5, rl.WHITE)
 		draw_entity_map_representation()
 	}
 }
@@ -370,6 +370,7 @@ raylib_setup :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT} | {.WINDOW_RESIZABLE})
 	rl.InitWindow(STARTING_WINDOW_WITDH, STARTING_WINDOW_HEIGHT, "Shapes from Odin!")
 	rl.SetTargetFPS(MAX_FPS)
+	hudFont = rl.LoadFontEx("FiraCode-Medium.ttf", 20, nil, 0)
 }
 
 draw :: proc() {
